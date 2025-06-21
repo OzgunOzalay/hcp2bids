@@ -16,7 +16,7 @@ import nibabel as nib
 import numpy as np
 import pandas as pd
 from pathlib import Path
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Optional
 import argparse
 import logging
 
@@ -267,7 +267,7 @@ class HCPToBIDSConverter:
         for dwi_run in dwi_runs:
             # Load DWI data
             dwi_img = nib.load(dwi_run)
-            dwi_data_list.append(dwi_img.get_fdata())
+            dwi_data_list.append(dwi_img.get_fdata())  # type: ignore
             
             # Load corresponding bval and bvec files
             # Extract the base name without .nii.gz extension
@@ -303,7 +303,7 @@ class HCPToBIDSConverter:
         merged_bvec = np.concatenate(bvec_list, axis=1)
         
         # Save merged DWI data with phase encoding direction in filename
-        merged_img = nib.Nifti1Image(merged_dwi, dwi_img.affine, dwi_img.header)
+        merged_img = nib.Nifti1Image(merged_dwi, dwi_img.affine, dwi_img.header)  # type: ignore
         dwi_dest = dwi_dir / f"sub-{subject_id}_dir-{phase_encoding}_dwi.nii.gz"
         nib.save(merged_img, dwi_dest)
         
@@ -368,7 +368,7 @@ class HCPToBIDSConverter:
             logger.warning(f"No data converted for subject {subject_id}")
             return False
     
-    def convert_all_subjects(self, subjects: List[str] = None):
+    def convert_all_subjects(self, subjects: Optional[List[str]] = None):
         """Convert all subjects or a specified subset."""
         if subjects is None:
             subjects = self.get_subject_ids()
