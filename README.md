@@ -87,11 +87,16 @@ bids_output/
 │   │   ├── sub-103818_phasediff.nii.gz
 │   │   └── sub-103818_phasediff.json
 │   └── dwi/
-│       ├── sub-103818_dwi.nii.gz
-│       ├── sub-103818_dwi.bval
-│       ├── sub-103818_dwi.bvec
-│       ├── sub-103818_dwi.json
-│       └── sub-103818_dwi_sbref.nii.gz
+│       ├── sub-103818_dir-LR_dwi.nii.gz
+│       ├── sub-103818_dir-LR_dwi.bval
+│       ├── sub-103818_dir-LR_dwi.bvec
+│       ├── sub-103818_dir-LR_dwi.json
+│       ├── sub-103818_dir-LR_dwi_sbref.nii.gz
+│       ├── sub-103818_dir-RL_dwi.nii.gz
+│       ├── sub-103818_dir-RL_dwi.bval
+│       ├── sub-103818_dir-RL_dwi.bvec
+│       ├── sub-103818_dir-RL_dwi.json
+│       └── sub-103818_dir-RL_dwi_sbref.nii.gz
 └── ... (additional subjects)
 ```
 
@@ -99,9 +104,10 @@ bids_output/
 
 The script automatically:
 1. Identifies all DWI runs for each subject
-2. Merges multiple DWI acquisitions into a single 4D volume
-3. Concatenates corresponding bval and bvec files
-4. Creates appropriate JSON metadata
+2. Groups DWI acquisitions by phase encoding direction (LR and RL)
+3. Merges multiple DWI acquisitions with the same phase encoding direction into separate 4D volumes
+4. Concatenates corresponding bval and bvec files for each phase encoding direction
+5. Creates appropriate JSON metadata with correct phase encoding information
 
 ## Field Map Processing
 
