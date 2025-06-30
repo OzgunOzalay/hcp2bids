@@ -55,55 +55,6 @@ class HCPToBIDSConverter:
             ],
             "DatasetDOI": "10.15387/fcp_indi.corr.hcp_1200"
         }
-        
-        # T1w JSON sidecar template
-        self.t1w_json_template = {
-            "Manufacturer": "Siemens",
-            "ManufacturersModelName": "Skyra",
-            "MagneticFieldStrength": 3.0,
-            "ScanningSequence": "GR/IR",
-            "SequenceVariant": "SP/MP",
-            "ScanOptions": "IR",
-            "SequenceName": "*tfl3d1_16ns",
-            "RepetitionTime": 2.4,
-            "EchoTime": 0.00214,
-            "InversionTime": 1.0,
-            "FlipAngle": 8,
-            "MultibandAccelerationFactor": 8,
-            "PhaseEncodingDirection": "j-",
-            "EffectiveEchoSpacing": 0.00058,
-            "EchoTrainLength": 1,
-            "PixelBandwidth": 240,
-            "ReceiveCoilActiveElements": "HEA;HEP",
-            "SoftwareVersions": "syngo MR E11",
-            "ImageType": ["ORIGINAL", "PRIMARY", "M", "ND", "NORM"],
-            "ProtocolName": "T1w_MPR1",
-            "ImageComments": "HCP_1200 T1w structural scan"
-        }
-        
-        # DWI JSON sidecar template
-        self.dwi_json_template = {
-            "Manufacturer": "Siemens",
-            "ManufacturersModelName": "Skyra",
-            "MagneticFieldStrength": 3.0,
-            "ScanningSequence": "EP",
-            "SequenceVariant": "SK",
-            "ScanOptions": "FS",
-            "SequenceName": "*ep_b0",
-            "RepetitionTime": 5.52,
-            "EchoTime": 0.0895,
-            "FlipAngle": 78,
-            "MultibandAccelerationFactor": 3,
-            "PhaseEncodingDirection": "j-",
-            "EffectiveEchoSpacing": 0.00078,
-            "EchoTrainLength": 1,
-            "PixelBandwidth": 1502,
-            "ReceiveCoilActiveElements": "HEA;HEP",
-            "SoftwareVersions": "syngo MR E11",
-            "ImageType": ["ORIGINAL", "PRIMARY", "M", "ND", "DIFFUSION"],
-            "ProtocolName": "DWI_dir95_LR",
-            "ImageComments": "HCP_1200 diffusion weighted imaging"
-        }
     
     def get_subject_ids(self) -> List[str]:
         """Get list of all subject IDs from HCP dataset."""
@@ -135,72 +86,6 @@ class HCPToBIDSConverter:
         
         logger.info(f"Created BIDS structure with {len(subject_ids)} subjects")
     
-    def convert_t1w_data(self, subject_id: str):
-        """Convert T1w structural data for a single subject."""
-        logger.info(f"Converting T1w data for subject {subject_id}")
-        
-        # Create subject directory
-        subject_dir = self.bids_root / f"sub-{subject_id}" / "anat"
-        subject_dir.mkdir(parents=True, exist_ok=True)
-        
-        # Source T1w file
-        t1w_source = self.hcp_root / subject_id / "unprocessed" / "3T" / "T1w_MPR1" / f"{subject_id}_3T_T1w_MPR1.nii.gz"
-        
-        if not t1w_source.exists():
-            logger.warning(f"T1w file not found for subject {subject_id}: {t1w_source}")
-            return False
-        
-        # Copy T1w file
-        t1w_dest = subject_dir / f"sub-{subject_id}_T1w.nii.gz"
-        shutil.copy2(t1w_source, t1w_dest)
-        
-        # Create T1w JSON sidecar
-        t1w_json = subject_dir / f"sub-{subject_id}_T1w.json"
-        with open(t1w_json, 'w') as f:
-            json.dump(self.t1w_json_template, f, indent=2)
-        
-        # Handle field maps if they exist
-        self._convert_fieldmaps(subject_id, subject_dir)
-        
-        logger.info(f"T1w conversion completed for subject {subject_id}")
-        return True
-    
-    def _convert_fieldmaps(self, subject_id: str, anat_dir: Path):
-        """Convert field map data to BIDS format."""
-        t1w_dir = self.hcp_root / subject_id / "unprocessed" / "3T" / "T1w_MPR1"
-        
-        # Check for magnitude field map
-        magnitude_source = t1w_dir / f"{subject_id}_3T_FieldMap_Magnitude.nii.gz"
-        if magnitude_source.exists():
-            magnitude_dest = anat_dir / f"sub-{subject_id}_magnitude1.nii.gz"
-            shutil.copy2(magnitude_source, magnitude_dest)
-            
-            # Create magnitude JSON
-            magnitude_json = anat_dir / f"sub-{subject_id}_magnitude1.json"
-            magnitude_metadata = {
-                "Units": "Hz",
-                "ImageType": ["ORIGINAL", "PRIMARY", "M", "ND", "NORM"]
-            }
-            with open(magnitude_json, 'w') as f:
-                json.dump(magnitude_metadata, f, indent=2)
-        
-        # Check for phase field map
-        phase_source = t1w_dir / f"{subject_id}_3T_FieldMap_Phase.nii.gz"
-        if phase_source.exists():
-            phase_dest = anat_dir / f"sub-{subject_id}_phasediff.nii.gz"
-            shutil.copy2(phase_source, phase_dest)
-            
-            # Create phase JSON
-            phase_json = anat_dir / f"sub-{subject_id}_phasediff.json"
-            phase_metadata = {
-                "Units": "rad/s",
-                "EchoTime1": 0.00246,
-                "EchoTime2": 0.00492,
-                "ImageType": ["ORIGINAL", "PRIMARY", "M", "ND", "NORM"]
-            }
-            with open(phase_json, 'w') as f:
-                json.dump(phase_metadata, f, indent=2)
-    
     def convert_dwi_data(self, subject_id: str):
         """Convert DWI diffusion data for a single subject."""
         logger.info(f"Converting DWI data for subject {subject_id}")
@@ -222,6 +107,8 @@ class HCPToBIDSConverter:
             if not file.name.endswith("_SBRef.nii.gz"):
                 dwi_runs.append(file)
         
+        logger.info(f"Found {len(dwi_runs)} DWI runs: {[f.name for f in dwi_runs]}")
+        
         if not dwi_runs:
             logger.warning(f"No DWI runs found for subject {subject_id}")
             return False
@@ -229,15 +116,52 @@ class HCPToBIDSConverter:
         # Sort runs by direction and phase encoding
         dwi_runs.sort()
         
-        # Merge DWI runs
-        self._merge_dwi_runs(subject_id, dwi_runs, subject_dir)
+        # Group runs by phase encoding (LR vs RL)
+        dwi_groups = {}
+        for dwi_run in dwi_runs:
+            # Extract phase encoding from filename (e.g., LR, RL)
+            # Filename format: 149741_3T_DWI_dir95_LR.nii.gz
+            parts = dwi_run.stem.split('_')
+            phase_encoding = None
+            
+            # Look for LR or RL in the filename parts
+            for part in parts:
+                if part in ['LR', 'RL']:
+                    phase_encoding = part
+                    break
+            
+            # If not found in parts, check the full filename
+            if phase_encoding is None:
+                if '_LR.' in dwi_run.name:
+                    phase_encoding = 'LR'
+                elif '_RL.' in dwi_run.name:
+                    phase_encoding = 'RL'
+            
+            logger.info(f"File: {dwi_run.name}, Extracted phase encoding: {phase_encoding}")
+            
+            if phase_encoding:
+                if phase_encoding not in dwi_groups:
+                    dwi_groups[phase_encoding] = []
+                dwi_groups[phase_encoding].append(dwi_run)
+            else:
+                logger.warning(f"Could not extract phase encoding from filename: {dwi_run.name}")
+        
+        logger.info(f"Grouped DWI runs by phase encoding: {dwi_groups}")
+        
+        # Merge each phase encoding group separately
+        for phase_encoding, runs in dwi_groups.items():
+            logger.info(f"Processing phase encoding {phase_encoding} with {len(runs)} runs")
+            self._merge_dwi_runs_by_phase_encoding(subject_id, phase_encoding, runs, subject_dir)
+        
+        # Handle SBRef images
+        self._convert_sbref_images(subject_id, dwi_dir, subject_dir)
         
         logger.info(f"DWI conversion completed for subject {subject_id}")
         return True
     
-    def _merge_dwi_runs(self, subject_id: str, dwi_runs: List[Path], dwi_dir: Path):
-        """Merge multiple DWI runs into a single 4D volume."""
-        logger.info(f"Merging {len(dwi_runs)} DWI runs for subject {subject_id}")
+    def _merge_dwi_runs_by_phase_encoding(self, subject_id: str, phase_encoding: str, dwi_runs: List[Path], dwi_dir: Path):
+        """Merge DWI runs for a specific phase encoding (all directions together)."""
+        logger.info(f"Merging {len(dwi_runs)} DWI runs for phase encoding {phase_encoding}")
         
         # Load and concatenate DWI data
         dwi_data_list = []
@@ -247,13 +171,18 @@ class HCPToBIDSConverter:
         for dwi_run in dwi_runs:
             # Load DWI data
             dwi_img = nib.load(dwi_run)
-            dwi_data_list.append(dwi_img.get_fdata())
+            dwi_data = dwi_img.get_fdata()
+            
+            # Check if data is 3D or 4D and handle accordingly
+            if dwi_data.ndim == 3:
+                # Add a 4th dimension if it's 3D
+                dwi_data = dwi_data[..., np.newaxis]
+                logger.info(f"Added 4th dimension to 3D data: {dwi_run.name}")
+            
+            dwi_data_list.append(dwi_data)
             
             # Load corresponding bval and bvec files
-            # Extract the base name without .nii.gz extension
-            run_base = dwi_run.stem  # This removes .nii.gz
-            # The stem method removes the last extension, but we need to remove .nii.gz completely
-            run_base = run_base.replace('.nii', '')  # Remove .nii if present
+            run_base = dwi_run.stem.replace('.nii', '')
             bval_file = dwi_run.parent / f"{run_base}.bval"
             bvec_file = dwi_run.parent / f"{run_base}.bvec"
             
@@ -272,65 +201,91 @@ class HCPToBIDSConverter:
                 logger.warning(f"bvec exists: {bvec_file.exists()}")
         
         if not dwi_data_list:
-            raise ValueError("No DWI data loaded")
+            raise ValueError(f"No DWI data loaded for phase encoding {phase_encoding}")
         
         if not bval_list or not bvec_list:
-            raise ValueError("No bval/bvec data loaded")
+            raise ValueError(f"No bval/bvec data loaded for phase encoding {phase_encoding}")
         
-        # Concatenate data along time dimension
+        # Concatenate data along time dimension (axis 3)
         merged_dwi = np.concatenate(dwi_data_list, axis=3)
         merged_bval = np.concatenate(bval_list)
         merged_bvec = np.concatenate(bvec_list, axis=1)
         
         # Save merged DWI data
         merged_img = nib.Nifti1Image(merged_dwi, dwi_img.affine, dwi_img.header)
-        dwi_dest = dwi_dir / f"sub-{subject_id}_dwi.nii.gz"
+        dwi_dest = dwi_dir / f"sub-{subject_id}_dwi_{phase_encoding}.nii.gz"
         nib.save(merged_img, dwi_dest)
         
         # Save merged bval and bvec
-        bval_dest = dwi_dir / f"sub-{subject_id}_dwi.bval"
-        bvec_dest = dwi_dir / f"sub-{subject_id}_dwi.bvec"
+        bval_dest = dwi_dir / f"sub-{subject_id}_dwi_{phase_encoding}.bval"
+        bvec_dest = dwi_dir / f"sub-{subject_id}_dwi_{phase_encoding}.bvec"
         
         np.savetxt(bval_dest, merged_bval, fmt='%.0f')
         np.savetxt(bvec_dest, merged_bvec, fmt='%.6f')
         
-        # Create DWI JSON sidecar
-        dwi_json = dwi_dir / f"sub-{subject_id}_dwi.json"
-        with open(dwi_json, 'w') as f:
-            json.dump(self.dwi_json_template, f, indent=2)
-        
-        # Handle SBRef images
-        self._convert_sbref_images(subject_id, dwi_dir)
+        logger.info(f"Saved merged DWI for phase encoding {phase_encoding}")
     
-    def _convert_sbref_images(self, subject_id: str, dwi_dir: Path):
-        """Convert SBRef (single-band reference) images."""
-        dwi_source_dir = self.hcp_root / subject_id / "unprocessed" / "3T" / "Diffusion"
-        
+    def _convert_sbref_images(self, subject_id: str, dwi_source_dir: Path, dwi_dir: Path):
+        """Convert SBRef (single-band reference) images by merging LR and RL separately."""
         # Find SBRef images
         sbref_files = list(dwi_source_dir.glob(f"{subject_id}_3T_DWI_dir*_SBRef.nii.gz"))
         
-        if sbref_files:
-            # For now, just copy the first SBRef (could be enhanced to merge multiple)
-            sbref_dest = dwi_dir / f"sub-{subject_id}_dwi_sbref.nii.gz"
-            shutil.copy2(sbref_files[0], sbref_dest)
+        if not sbref_files:
+            logger.info("No SBRef files found")
+            return
+        
+        # Group SBRef files by phase encoding
+        sbref_groups = {}
+        for sbref_file in sbref_files:
+            # Extract phase encoding from filename
+            parts = sbref_file.stem.split('_')
+            phase_encoding = None
+            for part in parts:
+                if part in ['LR', 'RL']:
+                    phase_encoding = part
+                    break
             
-            # Create SBRef JSON
-            sbref_json = dwi_dir / f"sub-{subject_id}_dwi_sbref.json"
-            sbref_metadata = {
-                "ImageType": ["ORIGINAL", "PRIMARY", "M", "ND", "NORM"],
-                "ProtocolName": "DWI_SBRef"
-            }
-            with open(sbref_json, 'w') as f:
-                json.dump(sbref_metadata, f, indent=2)
+            if phase_encoding:
+                if phase_encoding not in sbref_groups:
+                    sbref_groups[phase_encoding] = []
+                sbref_groups[phase_encoding].append(sbref_file)
+        
+        # Merge SBRef images for each phase encoding
+        for phase_encoding, sbref_runs in sbref_groups.items():
+            logger.info(f"Merging {len(sbref_runs)} SBRef runs for phase encoding {phase_encoding}")
+            
+            # Load and concatenate SBRef data
+            sbref_data_list = []
+            for sbref_run in sbref_runs:
+                sbref_img = nib.load(sbref_run)
+                sbref_data = sbref_img.get_fdata()
+                
+                # Check if data is 3D or 4D and handle accordingly
+                if sbref_data.ndim == 3:
+                    # Add a 4th dimension if it's 3D
+                    sbref_data = sbref_data[..., np.newaxis]
+                    logger.info(f"Added 4th dimension to 3D SBRef data: {sbref_run.name}")
+                
+                sbref_data_list.append(sbref_data)
+            
+            if sbref_data_list:
+                # Concatenate along time dimension (axis 3)
+                merged_sbref = np.concatenate(sbref_data_list, axis=3)
+                
+                # Save merged SBRef
+                merged_img = nib.Nifti1Image(merged_sbref, sbref_img.affine, sbref_img.header)
+                sbref_dest = dwi_dir / f"sub-{subject_id}_dwi_{phase_encoding}_sbref.nii.gz"
+                nib.save(merged_img, sbref_dest)
+                
+                logger.info(f"Saved merged SBRef for phase encoding {phase_encoding}")
     
     def convert_subject(self, subject_id: str):
         """Convert all data for a single subject."""
         logger.info(f"Converting subject {subject_id}")
         
-        success_t1w = self.convert_t1w_data(subject_id)
         success_dwi = self.convert_dwi_data(subject_id)
         
-        if success_t1w or success_dwi:
+        if success_dwi:
             logger.info(f"Subject {subject_id} conversion completed")
             return True
         else:
