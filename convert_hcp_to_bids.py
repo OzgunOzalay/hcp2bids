@@ -16,7 +16,7 @@ import nibabel as nib
 import numpy as np
 import pandas as pd
 from pathlib import Path
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Optional
 import argparse
 import logging
 
@@ -113,9 +113,11 @@ class HCPToBIDSConverter:
             logger.warning(f"No DWI runs found for subject {subject_id}")
             return False
         
-        # Sort runs by direction and phase encoding
-        dwi_runs.sort()
+        # Group runs by phase encoding direction (LR vs RL)
+        lr_runs = [run for run in dwi_runs if "_LR.nii.gz" in run.name]
+        rl_runs = [run for run in dwi_runs if "_RL.nii.gz" in run.name]
         
+<<<<<<< HEAD
         # Group runs by phase encoding (LR vs RL)
         dwi_groups = {}
         for dwi_run in dwi_runs:
@@ -155,13 +157,42 @@ class HCPToBIDSConverter:
         
         # Handle SBRef images
         self._convert_sbref_images(subject_id, dwi_dir, subject_dir)
+=======
+        # Sort runs within each group
+        lr_runs.sort()
+        rl_runs.sort()
+        
+        success = False
+        
+        # Merge LR runs if they exist
+        if lr_runs:
+            logger.info(f"Found {len(lr_runs)} LR runs for subject {subject_id}")
+            self._merge_dwi_runs(subject_id, lr_runs, subject_dir, "LR")
+            success = True
+        
+        # Merge RL runs if they exist
+        if rl_runs:
+            logger.info(f"Found {len(rl_runs)} RL runs for subject {subject_id}")
+            self._merge_dwi_runs(subject_id, rl_runs, subject_dir, "RL")
+            success = True
+        
+        if not success:
+            logger.warning(f"No LR or RL DWI runs found for subject {subject_id}")
+            return False
+>>>>>>> origin/main
         
         logger.info(f"DWI conversion completed for subject {subject_id}")
         return True
     
+<<<<<<< HEAD
     def _merge_dwi_runs_by_phase_encoding(self, subject_id: str, phase_encoding: str, dwi_runs: List[Path], dwi_dir: Path):
         """Merge DWI runs for a specific phase encoding (all directions together)."""
         logger.info(f"Merging {len(dwi_runs)} DWI runs for phase encoding {phase_encoding}")
+=======
+    def _merge_dwi_runs(self, subject_id: str, dwi_runs: List[Path], dwi_dir: Path, phase_encoding: str):
+        """Merge multiple DWI runs into a single 4D volume for a specific phase encoding direction."""
+        logger.info(f"Merging {len(dwi_runs)} {phase_encoding} DWI runs for subject {subject_id}")
+>>>>>>> origin/main
         
         # Load and concatenate DWI data
         dwi_data_list = []
@@ -171,6 +202,7 @@ class HCPToBIDSConverter:
         for dwi_run in dwi_runs:
             # Load DWI data
             dwi_img = nib.load(dwi_run)
+<<<<<<< HEAD
             dwi_data = dwi_img.get_fdata()
             
             # Check if data is 3D or 4D and handle accordingly
@@ -180,6 +212,9 @@ class HCPToBIDSConverter:
                 logger.info(f"Added 4th dimension to 3D data: {dwi_run.name}")
             
             dwi_data_list.append(dwi_data)
+=======
+            dwi_data_list.append(dwi_img.get_fdata())  # type: ignore
+>>>>>>> origin/main
             
             # Load corresponding bval and bvec files
             run_base = dwi_run.stem.replace('.nii', '')
@@ -211,6 +246,7 @@ class HCPToBIDSConverter:
         merged_bval = np.concatenate(bval_list)
         merged_bvec = np.concatenate(bvec_list, axis=1)
         
+<<<<<<< HEAD
         # Save merged DWI data
         merged_img = nib.Nifti1Image(merged_dwi, dwi_img.affine, dwi_img.header)
         dwi_dest = dwi_dir / f"sub-{subject_id}_dwi_{phase_encoding}.nii.gz"
@@ -219,10 +255,21 @@ class HCPToBIDSConverter:
         # Save merged bval and bvec
         bval_dest = dwi_dir / f"sub-{subject_id}_dwi_{phase_encoding}.bval"
         bvec_dest = dwi_dir / f"sub-{subject_id}_dwi_{phase_encoding}.bvec"
+=======
+        # Save merged DWI data with phase encoding direction in filename
+        merged_img = nib.Nifti1Image(merged_dwi, dwi_img.affine, dwi_img.header)  # type: ignore
+        dwi_dest = dwi_dir / f"sub-{subject_id}_dir-{phase_encoding}_dwi.nii.gz"
+        nib.save(merged_img, dwi_dest)
+        
+        # Save merged bval and bvec
+        bval_dest = dwi_dir / f"sub-{subject_id}_dir-{phase_encoding}_dwi.bval"
+        bvec_dest = dwi_dir / f"sub-{subject_id}_dir-{phase_encoding}_dwi.bvec"
+>>>>>>> origin/main
         
         np.savetxt(bval_dest, merged_bval, fmt='%.0f')
         np.savetxt(bvec_dest, merged_bvec, fmt='%.6f')
         
+<<<<<<< HEAD
         logger.info(f"Saved merged DWI for phase encoding {phase_encoding}")
     
     def _convert_sbref_images(self, subject_id: str, dwi_source_dir: Path, dwi_dir: Path):
@@ -278,6 +325,47 @@ class HCPToBIDSConverter:
                 nib.save(merged_img, sbref_dest)
                 
                 logger.info(f"Saved merged SBRef for phase encoding {phase_encoding}")
+=======
+        # Create DWI JSON sidecar with phase encoding direction
+        dwi_json_template = self.dwi_json_template.copy()
+        if phase_encoding == "LR":
+            dwi_json_template["PhaseEncodingDirection"] = "j-"
+        elif phase_encoding == "RL":
+            dwi_json_template["PhaseEncodingDirection"] = "j"
+        
+        dwi_json = dwi_dir / f"sub-{subject_id}_dir-{phase_encoding}_dwi.json"
+        with open(dwi_json, 'w') as f:
+            json.dump(dwi_json_template, f, indent=2)
+        
+        # Handle SBRef images for this phase encoding direction
+        self._convert_sbref_images(subject_id, dwi_dir, phase_encoding)
+    
+    def _convert_sbref_images(self, subject_id: str, dwi_dir: Path, phase_encoding: str):
+        """Convert SBRef (single-band reference) images for a specific phase encoding direction."""
+        dwi_source_dir = self.hcp_root / subject_id / "unprocessed" / "3T" / "Diffusion"
+        
+        # Find SBRef images for this phase encoding direction
+        sbref_files = list(dwi_source_dir.glob(f"{subject_id}_3T_DWI_dir*_{phase_encoding}_SBRef.nii.gz"))
+        
+        if sbref_files:
+            # For now, just copy the first SBRef (could be enhanced to merge multiple)
+            sbref_dest = dwi_dir / f"sub-{subject_id}_dir-{phase_encoding}_dwi_sbref.nii.gz"
+            shutil.copy2(sbref_files[0], sbref_dest)
+            
+            # Create SBRef JSON
+            sbref_json = dwi_dir / f"sub-{subject_id}_dir-{phase_encoding}_dwi_sbref.json"
+            sbref_metadata = {
+                "ImageType": ["ORIGINAL", "PRIMARY", "M", "ND", "NORM"],
+                "ProtocolName": f"DWI_SBRef_{phase_encoding}"
+            }
+            if phase_encoding == "LR":
+                sbref_metadata["PhaseEncodingDirection"] = "j-"
+            elif phase_encoding == "RL":
+                sbref_metadata["PhaseEncodingDirection"] = "j"
+            
+            with open(sbref_json, 'w') as f:
+                json.dump(sbref_metadata, f, indent=2)
+>>>>>>> origin/main
     
     def convert_subject(self, subject_id: str):
         """Convert all data for a single subject."""
@@ -292,7 +380,7 @@ class HCPToBIDSConverter:
             logger.warning(f"No data converted for subject {subject_id}")
             return False
     
-    def convert_all_subjects(self, subjects: List[str] = None):
+    def convert_all_subjects(self, subjects: Optional[List[str]] = None):
         """Convert all subjects or a specified subset."""
         if subjects is None:
             subjects = self.get_subject_ids()
